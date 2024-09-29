@@ -3,9 +3,10 @@
 """
 @author: Chenfei
 @contact:chenfei.ye@foxmail.com
-@version: 4.0
+@version: 4.3
 @file: run.py
 @time: 2023/09/29
+# update: support multi session
 # update: for multiple b-value dwi, try run eddy seperately, then concatenate together
 # update: MNI space res = 1.25 mm, T1w space res = 2 mm
 """
@@ -614,16 +615,24 @@ def preprocess_dwi(args, dwi_preproc_folder, t1_dir, dwi_image_input, dwi_image_
 
 
 
-def runSubject(args, subject_label, session_to_analyze, t1prep_dir):
+def runSubject(args, subject_label, session_label, t1prep_dir):
     global workingDir, tempDir, cleanup, resume
     label = 'sub-' + subject_label
-    output_dir = os.path.join(args.output_dir, label)
-    print('output_dir:'+ output_dir)
+
+    if session_label:
+        t1_dir = os.path.join(t1prep_dir, label,  'ses-' + session_label)
+        output_dir = os.path.join(args.output_dir, label,  'ses-' + session_label)
+        app_console('Launching participant-level analysis for subject \'' + label + '\'' + ' and session \'' + session_label + '\'')
+    else:
+        t1_dir = os.path.join(t1prep_dir, label)
+        output_dir = os.path.join(args.output_dir, label)
+        app_console('Launching participant-level analysis for subject \'' + label + '\'')
+    
+    app_console('output_dir:'+ output_dir)
     if os.path.exists(output_dir):
         app_warn('Output directory for subject \'' + label + '\' already exists. would erase the original folder by default')
         shutil.rmtree(output_dir)
     
-    t1_dir = os.path.join(t1prep_dir, label)
     if not os.path.exists(t1_dir):
         app_console('t1_dir: '+ t1_dir)
         app_error('Failed to detect output folder of BIDS-T1prep for subject ' + label)
@@ -912,7 +921,7 @@ def runSubject(args, subject_label, session_to_analyze, t1prep_dir):
     if os.path.exists(output_dir):
         app_warn('Found output_dir existing, delete it and create a new one')
         shutil.rmtree(output_dir)
-    os.mkdir(output_dir)
+    os.makedirs(output_dir)
 
     final_output_dwi_nii = 'dwi.nii.gz'
     final_output_dwi_bvec = 'dwi.bvec'
@@ -1012,6 +1021,8 @@ if __name__ == "__main__":
     cleanup = args.cleanup
     start = time.time()
     
+    # parse bids layout
+    layout = bids.layout.BIDSLayout(args.bids_dir, derivatives=False, absolute_paths=True)
     subjects_to_analyze = []
 
     # only for a subset of subjects
@@ -1033,8 +1044,24 @@ if __name__ == "__main__":
     if args.analysis_level == "participant":
         # find all T1s 
         for subject_label in subjects_to_analyze:
-            print('subject_label: '+ subject_label)
-            runSubject(args, subject_label, session_to_analyze, t1prep_dir)
+            smri = [f.path for f in layout.get(subject=subject_label,suffix='T1w',extension=["nii.gz", "nii"],**session_to_analyze)]  
+
+        if os.path.normpath(smri[0]).split(os.sep)[-3].split("-")[0] == 'ses':
+            sessions = [os.path.normpath(t1).split(os.sep)[-3].split("-")[-1] for t1 in smri]
+            sessions.sort()
+        else:
+            sessions = []
+
+        if sessions:
+            for s in range(len(sessions)):  
+                session_label = sessions[s]
+                smri_analyze = [f.path for f in layout.get(subject=subject_label,session=session_label, suffix='T1w',extension=["nii.gz", "nii"])][0]
+                runSubject(args, subject_label, session_label, t1prep_dir)
+        else:
+            session_label = []
+            smri_analyze = smri[0]
+            runSubject(args, subject_label, session_label, t1prep_dir)
+
 
     # running group level
     elif args.analysis_level == "group":
