@@ -666,10 +666,10 @@ def runSubject(args, subject_label, session_label, t1prep_dir):
 
 
     layout = bids.layout.BIDSLayout(args.bids_dir, derivatives=False, absolute_paths=True)
-    dwi_image_list = [f.path for f in layout.get(subject=subject_label,suffix='dwi',extension=["nii.gz", "nii"],**session_to_analyze)]
-    dwi_bval_list = [f.path for f in layout.get(subject=subject_label,suffix='dwi',extension=["bval"],**session_to_analyze)]
-    dwi_bvec_list = [f.path for f in layout.get(subject=subject_label,suffix='dwi',extension=["bvec"],**session_to_analyze)]
-    dwi_json_list = [f.path for f in layout.get(subject=subject_label,suffix='dwi',extension=["json"],**session_to_analyze)]
+    dwi_image_list = [f.path for f in layout.get(subject=subject_label,suffix='dwi',extension=["nii.gz", "nii"],session=session_label)]
+    dwi_bval_list = [f.path for f in layout.get(subject=subject_label,suffix='dwi',extension=["bval"],session=session_label)]
+    dwi_bvec_list = [f.path for f in layout.get(subject=subject_label,suffix='dwi',extension=["bvec"],session=session_label)]
+    dwi_json_list = [f.path for f in layout.get(subject=subject_label,suffix='dwi',extension=["json"],session=session_label)]
 
     # subject_data, layout = collect_data(args.bids_dir, subject_label)
     # dwi_fmap_groups, concatenation_scheme = group_dwi_scans(
@@ -1033,6 +1033,7 @@ if __name__ == "__main__":
         subject_dirs = glob.glob(os.path.join(args.bids_dir, "sub-*"))
         subjects_to_analyze = [subject_dir.split("-")[-1] for subject_dir in subject_dirs]
     subjects_to_analyze.sort()
+    app_console('subjects to be analyzed: ' + ' '.join(subjects_to_analyze))
 
     # only use a subset of sessions
     if args.session_label:
@@ -1046,21 +1047,21 @@ if __name__ == "__main__":
         for subject_label in subjects_to_analyze:
             smri = [f.path for f in layout.get(subject=subject_label,suffix='T1w',extension=["nii.gz", "nii"],**session_to_analyze)]  
 
-        if os.path.normpath(smri[0]).split(os.sep)[-3].split("-")[0] == 'ses':
-            sessions = [os.path.normpath(t1).split(os.sep)[-3].split("-")[-1] for t1 in smri]
-            sessions.sort()
-        else:
-            sessions = []
+            if os.path.normpath(smri[0]).split(os.sep)[-3].split("-")[0] == 'ses':
+                sessions = [os.path.normpath(t1).split(os.sep)[-3].split("-")[-1] for t1 in smri]
+                sessions.sort()
+            else:
+                sessions = []
 
-        if sessions:
-            for s in range(len(sessions)):  
-                session_label = sessions[s]
-                smri_analyze = [f.path for f in layout.get(subject=subject_label,session=session_label, suffix='T1w',extension=["nii.gz", "nii"])][0]
+            if sessions:
+                for s in range(len(sessions)):  
+                    session_label = sessions[s]
+                    smri_analyze = [f.path for f in layout.get(subject=subject_label,session=session_label, suffix='T1w',extension=["nii.gz", "nii"])][0]
+                    runSubject(args, subject_label, session_label, t1prep_dir)
+            else:
+                session_label = []
+                smri_analyze = smri[0]
                 runSubject(args, subject_label, session_label, t1prep_dir)
-        else:
-            session_label = []
-            smri_analyze = smri[0]
-            runSubject(args, subject_label, session_label, t1prep_dir)
 
 
     # running group level
